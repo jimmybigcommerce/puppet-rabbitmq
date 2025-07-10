@@ -98,17 +98,43 @@ Puppet::Type.newtype(:rabbitmq_parameter) do
   def validate_value(value)
     raise ArgumentError, 'Invalid value' unless [Hash].include?(value.class)
 
-    value.each do |_k, v|
-      raise ArgumentError, 'Invalid value' unless [String, TrueClass, FalseClass, Array].include?(v.class)
+    validate_hash_values(value)
+  end
+
+  private
+
+  def validate_hash_values(hash)
+    hash.each do |_k, v|
+      case v
+      when Hash
+        validate_hash_values(v)  # Recursively validate nested hashes
+      when String, TrueClass, FalseClass, Array, Integer, Float, NilClass
+        # Valid types - do nothing
+      else
+        raise ArgumentError, "Invalid value type: #{v.class}. Allowed types: String, TrueClass, FalseClass, Array, Hash, Integer, Float, NilClass"
+      end
     end
   end
 
   def munge_value(value)
     return value if value(:autoconvert) == :false
 
-    value.transform_values do |v|
-      if v.is_a?(String) && v.match?(%r{\A[-+]?[0-9]+\z})
-        v.to_i
+    munge_hash_values(value)
+  end
+
+  private
+
+  def munge_hash_values(hash)
+    hash.transform_values do |v|
+      case v
+      when Hash
+        munge_hash_values(v)  # Recursively handle nested hashes
+      when String
+        if v.match?(%r{\A[-+]?[0-9]+\z})
+          v.to_i
+        else
+          v
+        end
       else
         v
       end
